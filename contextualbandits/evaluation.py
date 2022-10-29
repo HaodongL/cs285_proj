@@ -256,7 +256,20 @@ def evaluateDoublyRobust(pred, X, a, r, p, reward_estimator, nchoices=None,
     
     actions_matching = pred==a
     out = rhat_new
-    out[actions_matching] += (r[actions_matching]-rhat_old[actions_matching])/p[actions_matching].reshape(-1)
+    # out[actions_matching] += (r[actions_matching]-rhat_old[actions_matching])/p[actions_matching].reshape(-1)
+
+    # tmle
+    # y r, Q rhat_old, g p, a a, 
+    H1n = 1/p
+    Han = actions_matching*H1n
+
+    logLFM = sm.GLM(r, 
+                    Han, 
+                    offset = logit(rhat_old), 
+                    family = sm.families.Binomial()).fit()
+
+    eps = logLFM.params.item()
+    out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
     
     return np.mean(out)
 
