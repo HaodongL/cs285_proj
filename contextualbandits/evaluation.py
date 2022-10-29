@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd, numpy as np
-import statsmodels.api as sm
+# import statsmodels.api as sm
+import statsmodels
 from .utils import _check_fit_input, _check_1d_inp, \
         _check_X_input, _check_random_state
 from .online import SeparateClassifiers
@@ -264,10 +265,10 @@ def evaluateDoublyRobust(pred, X, a, r, p, reward_estimator, nchoices=None,
     H1n = 1/p
     Han = actions_matching*H1n
 
-    logLFM = sm.GLM(r, 
+    logLFM = statsmodels.api.GLM(r, 
                     Han, 
                     offset = logit(rhat_old), 
-                    family = sm.families.Binomial()).fit()
+                    family = statsmodels.api.families.Binomial()).fit()
 
     eps = logLFM.params.item()
     out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
