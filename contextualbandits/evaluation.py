@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pandas as pd, numpy as np
+import statsmodels.api as sm
 from .utils import _check_fit_input, _check_1d_inp, \
         _check_X_input, _check_random_state
 from .online import SeparateClassifiers
