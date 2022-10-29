@@ -2,6 +2,8 @@
 
 import pandas as pd, numpy as np
 import statsmodels.api as sm
+from scipy.special import expit
+from scipy.special import logit
 # import statsmodels
 from .utils import _check_fit_input, _check_1d_inp, \
         _check_X_input, _check_random_state
