@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np, warnings, ctypes
+import torch
 from .utils import _check_constructor_input, _check_beta_prior, \
             _check_smoothing, _check_fit_input, _check_X_input, _check_1d_inp, \
             _ZeroPredictor, _OnePredictor, _OneVsRest,\
@@ -3606,3 +3607,272 @@ class PartitionedTS(_BasePolicyWithExploit):
         self._add_common_params(base, beta_prior, smoothing, noise_to_smooth, njobs,
                                 nchoices, False, None, False,
                                 assume_unique_reward, random_state)
+
+
+
+class NeuralBandit(_BasePolicyWithExploit):
+    """
+    LinUCB
+
+    Note
+    ----
+    This strategy requires each fitted model to store a square matrix with
+    dimension equal to the number of features. Thus, memory consumption can grow
+    very high with this method.
+
+    Note
+    ----
+    The 'X' data (covariates) should ideally be centered before passing them
+    to 'fit', 'partial_fit', 'predict'.
+
+    Note
+    ----
+    The default hyperparameters here are meant to match the original reference, but
+    it's recommended to change them. Particularly: use ``beta_prior`` instead of
+    ``ucb_from_empty``, decrease ``alpha``, and maybe increase ``lambda_``.
+
+    Parameters
+    ----------
+    nchoices : int or list-like
+        Number of arms/labels to choose from. Can also pass a list, array, or Series with arm names, in which case
+        the outputs from predict will follow these names and arms can be dropped by name, and new ones added with a
+        custom name.
+    alpha : float
+        Parameter to control the upper confidence bound (more is higher).
+    lambda_ : float > 0
+        Regularization parameter. References assumed this would always be equal to 1, but this
+        implementation allows to change it.
+    fit_intercept : bool
+        Whether to add an intercept term to the coefficients.
+    use_float : bool
+        Whether to use C 'float' type for the required matrices. If passing 'False',
+        will use C 'double'. Be aware that memory usage for this model can grow
+        very large.
+    method : str, one of 'chol' or 'sm'
+        Method used to fit the model. Options are:
+
+        ``'chol'``:
+            Uses the Cholesky decomposition to solve the linear system from the
+            least-squares closed-form each time 'fit' or 'partial_fit' is called.
+            This is likely to be faster when fitting the model to a large number
+            of observations at once, and is able to better exploit multi-threading.
+        ``'sm'``:
+            Starts with an inverse diagonal matrix and updates it as each
+            new observation comes using the Sherman-Morrison formula, thus
+            never explicitly solving the linear system, nor needing to calculate
+            a matrix inverse. This is likely to be faster when fitting the model
+            to small batches of observations. Be aware that with this method, it
+            will add regularization to the intercept if passing 'fit_intercept=True'.
+    ucb_from_empty : bool
+        Whether to make upper confidence bounds on arms with no observations according
+        to the formula, as suggested in the references (ties are broken at random for
+        them). Choosing this option leads to policies that usually start making random
+        predictions until having sampled from all arms, and as such, it's not
+        recommended when the number of arms is large relative to the number of rounds.
+        Instead, it's recommended to use ``beta_prior``, which acts in the same way
+        as for the other policies in this library.
+    beta_prior : str 'auto', None, tuple ((a,b), n), or list[tuple((a,b), n)]
+        If not 'None', when there are less than 'n' samples with and without
+        a reward from a given arm, it will predict the score for that class as a
+        random number drawn from a beta distribution with the prior
+        specified by 'a' and 'b'. If set to "auto", will be calculated as:
+            beta_prior = ((3/log2(nchoices), 4), 2).
+        Can also pass different priors per arm, in which case they should be passed
+        as a list of tuples.
+        This parameter can have a very large impact in the end results, and it's
+        recommended to tune it accordingly - scenarios with low expected reward rates
+        should have priors that result in drawing small random numbers, whereas
+        scenarios with large expected reward rates should have stronger priors and
+        tend towards larger random numbers. Also, the more arms there are, the smaller
+        the optimal expected value for these random numbers.
+        Ignored when passing ``ucb_from_empty=True``.
+    smoothing : None, tuple (a,b), or list
+        If not None, predictions will be smoothed as yhat_smooth = (yhat*n + a)/(n + b),
+        where 'n' is the number of times each arm was chosen in the training data.
+        Can also pass it as a list of tuples with different 'a' and 'b' parameters for each arm
+        (e.g. if there are arm features, these parameters can be determined through a different model).
+        Recommended to use only one of ``beta_prior`` or ``smoothing``.
+        Note that it is technically incorrect to apply smoothing like this (because
+        the predictions from models are not bounded between zero and one), but
+        if neither ``beta_prior``, nor ``smoothing`` are passed, the policy can get
+        stuck in situations in which it will only choose actions from the first batch
+        of observations to which it is fit (if using ``ucb_from_empty=False``), or
+        only from the first arms that show rewards (if using ``ucb_from_empty=True``).
+    noise_to_smooth : bool
+        If passing ``smoothing``, whether to add a small amount of random
+        noise :math:`\sim Uniform(0, 10^{-12})` in order to break ties at random instead of
+        choosing the smallest arm index.
+        Ignored when passing ``smoothing=None``.
+    assume_unique_reward : bool
+        Whether to assume that only one arm has a reward per observation. If set to 'True',
+        whenever an arm receives a reward, the classifiers for all other arms will be
+        fit to that observation too, having negative label.
+    random_state : int, None, RandomState, or Generator
+        Either an integer which will be used as seed for initializing a
+        ``Generator`` object for random number generation, a ``RandomState``
+        object (from NumPy) from which to draw an integer, or a ``Generator``
+        object (from NumPy), which will be used directly.
+        While this controls random number generation for this meteheuristic,
+        there can still be other sources of variations upon re-runs, such as
+        data aggregations in parallel (e.g. from OpenMP or BLAS functions).
+    njobs : int or None
+        Number of parallel jobs to run. If passing None will set it to 1. If passing -1 will
+        set it to the number of CPU cores. Be aware that the algorithm will use BLAS function calls,
+        and if these have multi-threading enabled, it might result in a slow-down
+        as both functions compete for available threads.
+
+    References
+    ----------
+    .. [1] Chu, Wei, et al. "Contextual bandits with linear payoff functions."
+           Proceedings of the Fourteenth International Conference on Artificial Intelligence and Statistics. 2011.
+    .. [2] Li, Lihong, et al. "A contextual-bandit approach to personalized news article recommendation."
+           Proceedings of the 19th international conference on World wide web. ACM, 2010.
+    """
+    def __init__(self, nchoices, context_dimension=1, learning_rate=0.1,hidden_size=2,n_layers=1,gamma=0.05,alpha=1.0, lambda_=1.0, fit_intercept=True,
+                 use_float=True, method="sm", ucb_from_empty=True,
+                 beta_prior=None, smoothing=None, noise_to_smooth=True,
+                 assume_unique_reward=False, random_state=None, njobs=1):
+        # self._ts = False
+        # self._add_common_lin(alpha, lambda_, fit_intercept, use_float, method, nchoices, njobs)
+        # base = _LinUCB_n_TS_single(alpha=self.alpha, lambda_=self.lambda_,
+        #                            fit_intercept=self.fit_intercept,
+        #                            use_float=self.use_float, method=self.method,
+        #                            ts=False, ts_from_ci=False)
+        # self._add_common_params(base, beta_prior, smoothing, noise_to_smooth, njobs, nchoices,
+        #                         True, None, False, assume_unique_reward,
+        #                         random_state, assign_algo=True, prior_def_ucb=True,
+        #                         force_unfit_predict=ucb_from_empty)
+        self.nchoices = nchoices
+        self.dim = context_dimension
+        self.gamma = gamma
+        self.networks = [build_mlp(input_size=context_dimension,
+                                   output_size=1,
+                                   n_layers=n_layers,
+                                   size=hidden_size)]
+        self.optimizer = optim.Adam(reduce(lambda a,b: a + b,
+                                           [n.parameters() for n in self.networks]),
+                                    self.learning_rate)
+        self.loss = torch.nn.MSELoss()
+
+
+    def _add_common_lin(self, alpha, lambda_, fit_intercept, use_float, method, nchoices, njobs):
+        if isinstance(alpha, int):
+            alpha = float(alpha)
+        assert isinstance(alpha, float)
+        if isinstance(lambda_, int):
+            lambda_ = float(lambda_)
+        assert lambda_ >= 0.
+        assert method in ["chol", "sm"]
+
+        self.alpha = alpha
+        self.lambda_ = lambda_
+        self.fit_intercept = bool(fit_intercept)
+        self.use_float = bool(use_float)
+        self.method = method
+        if self._ts:
+            self.v_sq = self.alpha
+            del self.alpha
+
+    def reset_alpha(self, alpha=1.0):
+        """
+        Set the upper confidence bound parameter to a custom number
+
+        Note
+        ----
+        This method is only for LinUCB, not for LinTS.
+
+        Parameters
+        ----------
+        alpha : float
+            Parameter to control the upper confidence bound (more is higher).
+
+        Returns
+        -------
+        self : obj
+            This object
+        """
+        if self._ts:
+            raise ValueError("Method is only available for LinUCB")
+        if isinstance(alpha, int):
+            alpha = float(alpha)
+        assert isinstance(alpha, float)
+        self.alpha = alpha
+        self.base_algorithm.alpha = alpha
+        if self.is_fitted:
+            self._oracles.reset_attribute("alpha", alpha)
+        return self
+
+    def predict(self, X, exploit = False, output_score = False):
+        scores = torch.stack([self.n(X) for n in self.networks]).to_numpy()
+        self.scores = scores
+        best_ks = np.argmax(scores,axis=0)
+        actions_this_batch = []
+        for b in range(len(best_k)):
+            best_k = best_ks[b]
+            new_k_dist = np.ones(self.nchoices) * self.gamma/self.nchoices
+            best_k_weight = np.zeros(self.nchoices)
+            best_k_weight[best_k] = 1-self.gamma
+            new_k_dist += best_k_weight
+            next_action = np.random.choice(new_k_dist)
+            actions_this_batch.append(next_action)
+        actions_this_batch = np.array(actions_this_batch)
+        self.actions_this_batch = actions_this_batch
+        return actions_this_batch
+
+    def fit(self, X, y):
+        scores_of_actions = self.scores[self.actions_this_batch]
+        loss = self.loss(scores_of_actions, y)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.is_fitted = True
+
+    # def partial_fit(self, X, y, *args, **kwargs):
+    #     raise NotImplementedError
+    def exploit(self, X):
+        if not self.is_fitted:
+            return np.zeros(X.shape[0])
+        return self.predict(X, exploit = True)
+
+
+def build_mlp(
+        input_size: int,
+        output_size: int,
+        n_layers: int,
+        size: int,
+        activation: Activation = 'tanh',
+        output_activation: Activation = 'identity',
+):
+    """
+        Builds a feedforward neural network
+        arguments:
+            input_placeholder: placeholder variable for the state (batch_size, input_size)
+            scope: variable scope of the network
+            n_layers: number of hidden layers
+            size: dimension of each hidden layer
+            activation: activation of each hidden layer
+            input_size: size of the input layer
+            output_size: size of the output layer
+            output_activation: activation of the output layer
+        returns:
+            output_placeholder: the result of a forward pass through the hidden layers + the output layer
+    """
+    if isinstance(activation, str):
+        activation = _str_to_activation[activation]
+    if isinstance(output_activation, str):
+        output_activation = _str_to_activation[output_activation]
+    layers = []
+    in_size = input_size
+    for _ in range(n_layers):
+        layers.append(nn.Linear(in_size, size))
+        layers.append(activation)
+        in_size = size
+    layers.append(nn.Linear(in_size, output_size))
+    layers.append(output_activation)
+    return nn.Sequential(*layers)
+def from_numpy(*args, **kwargs):
+    return torch.from_numpy(*args, **kwargs).float().to(device)
+
+
+def to_numpy(tensor):
+    return tensor.to('cpu').detach().numpy()
