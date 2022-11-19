@@ -2,6 +2,8 @@
 
 import numpy as np, warnings, ctypes
 import torch
+from torch import nn
+
 from .utils import _check_constructor_input, _check_beta_prior, \
             _check_smoothing, _check_fit_input, _check_X_input, _check_1d_inp, \
             _ZeroPredictor, _OnePredictor, _OneVsRest,\
