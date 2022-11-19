@@ -3834,14 +3834,23 @@ class NeuralBandit(_BasePolicyWithExploit):
             return np.zeros(X.shape[0])
         return self.predict(X, exploit = True)
 
+_str_to_activation = {
+    'relu': nn.ReLU(),
+    'tanh': nn.Tanh(),
+    'leaky_relu': nn.LeakyReLU(),
+    'sigmoid': nn.Sigmoid(),
+    'selu': nn.SELU(),
+    'softplus': nn.Softplus(),
+    'identity': nn.Identity(),
+}
 
 def build_mlp(
         input_size: int,
         output_size: int,
         n_layers: int,
         size: int,
-        activation: Activation = 'tanh',
-        output_activation: Activation = 'identity',
+        activation: 'tanh',
+        output_activation: 'identity',
 ):
     """
         Builds a feedforward neural network
