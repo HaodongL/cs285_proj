@@ -3851,8 +3851,8 @@ def build_mlp(
         output_size: int,
         n_layers: int,
         size: int,
-        activation: 'tanh',
-        output_activation: 'identity',
+        activation= 'tanh',
+        output_activation= 'identity',
 ):
     """
         Builds a feedforward neural network
