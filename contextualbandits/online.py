@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+from functools import reduce
 import numpy as np, warnings, ctypes
 import torch
 from torch import nn
