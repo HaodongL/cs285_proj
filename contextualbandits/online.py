@@ -3756,6 +3756,7 @@ class NeuralBandit(_BasePolicyWithExploit):
                                            [n.parameters() for n in self.networks]),
                                     self.learning_rate)
         self.loss = torch.nn.MSELoss()
+        self.learning_rate = learning_rate
 
 
     def _add_common_lin(self, alpha, lambda_, fit_intercept, use_float, method, nchoices, njobs):
