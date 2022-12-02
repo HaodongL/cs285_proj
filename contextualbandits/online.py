@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from functools import reduce
+from itertools import chain
 import numpy as np, warnings, ctypes
 import torch
 from torch import nn
@@ -3755,8 +3756,7 @@ class NeuralBandit(_BasePolicyWithExploit):
                                    n_layers=n_layers,
                                    size=hidden_size) for _ in range(nchoices)]
         self.networks = [n.to('cuda') for n in self.networks]
-        self.optimizer = optim.Adam(reduce(lambda a,b: a + b,
-                                           [n.parameters() for n in self.networks]),
+        self.optimizer = optim.Adam(chain([n.parameters() for n in self.networks]),
                                     self.learning_rate)
         self.loss = torch.nn.MSELoss()
 
