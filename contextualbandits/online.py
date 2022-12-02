@@ -3867,6 +3867,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        self.scores = self.scores.detach()
         self.is_fitted = True
 
     # def partial_fit(self, X, y, *args, **kwargs):
