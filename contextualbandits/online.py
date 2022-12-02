@@ -3893,7 +3893,7 @@ def build_mlp(
     layers.append(output_activation)
     return nn.Sequential(*layers)
 def from_numpy(*args, **kwargs):
-    return torch.from_numpy(*args, **kwargs).float().to(device)
+    return torch.from_numpy(*args, **kwargs).float().to('cuda')
 
 
 def to_numpy(tensor):
