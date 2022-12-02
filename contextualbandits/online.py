@@ -3826,6 +3826,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         return actions_this_batch
 
     def fit(self, X, a, r):
+        print("actions", a)
         X = from_numpy(X)
         a = from_numpy(a)
         r = from_numpy(r)
@@ -3903,7 +3904,7 @@ def build_mlp(
     layers.append(output_activation)
     return nn.Sequential(*layers)
 def from_numpy(*args, **kwargs):
-    return torch.from_numpy(*args, **kwargs).float().to('cuda')
+    return torch.from_numpy(*args, **kwargs).float().to('cuda:0')
 
 
 def to_numpy(tensor):
