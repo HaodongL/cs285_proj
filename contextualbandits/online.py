@@ -3842,7 +3842,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("shape of rewards", r.shape)
         scores = scores.squeeze(2)
         print("shape of reshaped scores", scores.shape)
-        scores_of_actions = torch.gather(scores, dim=1, index=a.type(torch.cuda.LongTensor))
+        scores_of_actions = torch.gather(scores, dim=1, index=a.unsqueeze(1).type(torch.cuda.LongTensor))
         print("shape of scores of actions", scores_of_actions.shape)
         print("type of scores_of_actions", scores_of_actions.type())
         print("type of rewards", r.type())
