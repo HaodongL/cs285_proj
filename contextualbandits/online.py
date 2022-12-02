@@ -3745,6 +3745,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         #                         True, None, False, assume_unique_reward,
         #                         random_state, assign_algo=True, prior_def_ucb=True,
         #                         force_unfit_predict=ucb_from_empty)
+        self.scores = None
         self.nchoices = nchoices
         self.dim = context_dimension
         self.gamma = gamma
@@ -3824,6 +3825,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         return actions_this_batch
 
     def fit(self, X, a, r):
+        assert self.scores != None
         scores_of_actions = self.scores[self.actions_this_batch]
         loss = self.loss(scores_of_actions, r)
         self.optimizer.zero_grad()
