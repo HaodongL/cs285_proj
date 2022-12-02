@@ -3754,6 +3754,7 @@ class NeuralBandit(_BasePolicyWithExploit):
                                    output_size=1,
                                    n_layers=n_layers,
                                    size=hidden_size)]
+        self.networks = [n.to('cuda') for n in self.networks]
         self.optimizer = optim.Adam(reduce(lambda a,b: a + b,
                                            [n.parameters() for n in self.networks]),
                                     self.learning_rate)
