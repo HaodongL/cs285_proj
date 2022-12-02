@@ -3809,7 +3809,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         return self
 
     def predict(self, X, exploit = False, output_score = False):
-        scores = torch.stack([n(X) for n in self.networks]).to_numpy()
+        scores = torch.stack([n(X) for n in self.networks]).numpy()
         self.scores = scores
         best_ks = np.argmax(scores,axis=0)
         actions_this_batch = []
@@ -3828,7 +3828,7 @@ class NeuralBandit(_BasePolicyWithExploit):
     def fit(self, X, a, r):
         X = from_numpy(X)
         r = from_numpy(r)
-        scores = torch.stack([n(X) for n in self.networks]).to_numpy()
+        scores = torch.stack([n(X) for n in self.networks])
         print("shape of X", X.shape)
         print("shape of scores", scores.shape)
         print("shape of actions", a.shape)
