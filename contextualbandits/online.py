@@ -3812,9 +3812,10 @@ class NeuralBandit(_BasePolicyWithExploit):
     def predict(self, X, exploit = False, output_score = False):
         X = from_numpy(X)
         print("context shape", X.shape)
-        scores = torch.stack([n(X) for n in self.networks], dim=1).numpy()
+        scores = torch.stack([n(X) for n in self.networks], dim=1)
         print("scores shape", scores.shape)
         self.scores = scores
+        scores = scores.detach().numpy()
         best_ks = np.argmax(scores,axis=0)
         print("best ks shape", best_ks.shape)
         actions_this_batch = []
