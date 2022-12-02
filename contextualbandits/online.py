@@ -3819,7 +3819,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         best_ks = np.argmax(scores,axis=0)
         print("best ks shape", best_ks.shape)
         actions_this_batch = []
-        for b in range(len(best_k)):
+        for b in range(len(best_ks)):
             best_k = best_ks[b]
             new_k_dist = np.ones(self.nchoices) * self.gamma/self.nchoices
             best_k_weight = np.zeros(self.nchoices)
