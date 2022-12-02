@@ -3827,6 +3827,7 @@ class NeuralBandit(_BasePolicyWithExploit):
 
     def fit(self, X, a, r):
         X = from_numpy(X)
+        a = from_numpy(a)
         r = from_numpy(r)
         scores = torch.stack([n(X) for n in self.networks]).squeeze(0).squeeze(1)
         print("shape of X", X.shape)
