@@ -3814,7 +3814,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("context shape", X.shape)
         scores = torch.stack([n(X) for n in self.networks], dim=1).squeeze(2)
         print("scores shape", scores.shape)
-        if self.scores:
+        if self.scores != None:
             self.scores = torch.cat((self.scores, scores), 0)
         else:
             self.scores = scores
