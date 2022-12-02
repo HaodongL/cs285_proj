@@ -3841,6 +3841,8 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("shape of rewards", r.shape)
         scores_of_actions = torch.gather(scores, dim=0, index=a.type(torch.cuda.LongTensor))
         print("shape of scores of actions", scores_of_actions.shape)
+        print("type of scores_of_actions", scores_of_actions.type())
+        print("type of rewards", r.type())
         loss = self.loss(scores_of_actions, r)
         self.optimizer.zero_grad()
         loss.backward()
