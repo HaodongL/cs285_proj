@@ -3748,6 +3748,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.nchoices = nchoices
         self.dim = context_dimension
         self.gamma = gamma
+        self.learning_rate = learning_rate
         self.networks = [build_mlp(input_size=context_dimension,
                                    output_size=1,
                                    n_layers=n_layers,
@@ -3756,7 +3757,6 @@ class NeuralBandit(_BasePolicyWithExploit):
                                            [n.parameters() for n in self.networks]),
                                     self.learning_rate)
         self.loss = torch.nn.MSELoss()
-        self.learning_rate = learning_rate
 
 
     def _add_common_lin(self, alpha, lambda_, fit_intercept, use_float, method, nchoices, njobs):
