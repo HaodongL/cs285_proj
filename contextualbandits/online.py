@@ -3832,6 +3832,8 @@ class NeuralBandit(_BasePolicyWithExploit):
         scores = torch.stack([n(X) for n in self.networks]).squeeze(0).squeeze(1)
         print("device of single scores", self.networks[0](X).get_device())
         print("device of scores", scores.get_device())
+        print("device of actions without conversion", a.get_device())
+        print("type of actions", a.type())
         print("device of actions", a.type(torch.LongTensor).get_device())
         print("shape of X", X.shape)
         print("shape of scores", scores.shape)
