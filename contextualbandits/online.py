@@ -3886,6 +3886,16 @@ _str_to_activation = {
     'softplus': nn.Softplus(),
     'identity': nn.Identity(),
 }
+def weights_init_uniform_rule(m):
+    #https://stackoverflow.com/questions/49433936/how-do-i-initialize-weights-in-pytorch
+    classname = m.__class__.__name__
+    # for every Linear layer in a model..
+    if classname.find('Linear') != -1:
+        # get the number of the inputs
+        n = m.in_features
+        y = 1.0/np.sqrt(n)
+        m.weight.data.uniform_(-y, y)
+        m.bias.data.fill_(0)
 
 def build_mlp(
         input_size: int,
@@ -3921,7 +3931,9 @@ def build_mlp(
         in_size = size
     layers.append(nn.Linear(in_size, output_size))
     layers.append(output_activation)
-    return nn.Sequential(*layers)
+    net = nn.Sequential(*layers)
+    net.apply(weights_init_uniform_rule)
+    return net
 
 proj_device = 'cpu'
 
