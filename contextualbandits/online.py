@@ -3814,7 +3814,10 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("context shape", X.shape)
         scores = torch.stack([n(X) for n in self.networks], dim=1).squeeze(2)
         print("scores shape", scores.shape)
-        self.scores = scores
+        if self.scores:
+            self.scores = torch.cat((self.scores, scores), 0)
+        else:
+            self.scores = scores
         scores = scores.detach().numpy()
         best_ks = np.argmax(scores,axis=1)
         print("best ks shape", best_ks.shape)
