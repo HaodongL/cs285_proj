@@ -3828,12 +3828,12 @@ class NeuralBandit(_BasePolicyWithExploit):
     def fit(self, X, a, r):
         X = from_numpy(X)
         r = from_numpy(r)
-        scores = torch.stack([n(X) for n in self.networks])
+        scores = torch.stack([n(X) for n in self.networks]).squeeze(0).squeeze(1)
         print("shape of X", X.shape)
         print("shape of scores", scores.shape)
         print("shape of actions", a.shape)
         print("shape of rewards", r.shape)
-        scores_of_actions = scores[a]
+        scores_of_actions = torch.gather(scores, dim=0, index=a.type(torch.LongTensor))
         print("shape of scores of actions", scores_of_actions.shape)
         loss = self.loss(scores_of_actions, r)
         self.optimizer.zero_grad()
