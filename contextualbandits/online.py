@@ -3614,6 +3614,7 @@ class PartitionedTS(_BasePolicyWithExploit):
 
 
 
+
 class NeuralBandit(_BasePolicyWithExploit):
     """
     LinUCB
@@ -3755,7 +3756,7 @@ class NeuralBandit(_BasePolicyWithExploit):
                                    output_size=1,
                                    n_layers=n_layers,
                                    size=hidden_size) for _ in range(nchoices)]
-        self.networks = [n.to('cuda') for n in self.networks]
+        self.networks = [n.to(proj_device) for n in self.networks]
         self.optimizer = optim.Adam(chain(*[n.parameters() for n in self.networks]),
                                     self.learning_rate)
         self.loss = torch.nn.MSELoss()
@@ -3905,8 +3906,11 @@ def build_mlp(
     layers.append(nn.Linear(in_size, output_size))
     layers.append(output_activation)
     return nn.Sequential(*layers)
+
+proj_device = 'cpu'
+
 def from_numpy(*args, **kwargs):
-    return torch.from_numpy(*args, **kwargs).float().to('cpu')
+    return torch.from_numpy(*args, **kwargs).float().to(proj_device)
 
 
 def to_numpy(tensor):
