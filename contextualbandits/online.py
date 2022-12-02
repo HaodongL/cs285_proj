@@ -3823,9 +3823,9 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.actions_this_batch = actions_this_batch
         return actions_this_batch
 
-    def fit(self, X, y):
+    def fit(self, X, a, r):
         scores_of_actions = self.scores[self.actions_this_batch]
-        loss = self.loss(scores_of_actions, y)
+        loss = self.loss(scores_of_actions, r)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
