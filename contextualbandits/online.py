@@ -3831,7 +3831,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         X = from_numpy(X)
         a = from_numpy(a)
         r = from_numpy(r)
-        scores = torch.stack([n(X) for n in self.networks])
+        scores = torch.stack([n(X) for n in self.networks], dim=1)
         print("device of single scores", self.networks[0](X).get_device())
         print("device of scores", scores.get_device())
         print("device of actions without conversion", a.get_device())
