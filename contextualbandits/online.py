@@ -3834,12 +3834,15 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.actions_this_batch = actions_this_batch
         return actions_this_batch
 
-    def fit(self, X, a, r):
+    def fit(self, X, a, r, warm_start=False):
         print("actions", a)
         X = from_numpy(X)
         a = from_numpy(a)
         r = from_numpy(r)
-        scores = torch.stack([n(X) for n in self.networks], dim=1)
+        if warm_start:
+            scores = self.scores
+        else:
+            scores = torch.stack([n(X) for n in self.networks], dim=1).squeeze(2)
         print("device of single scores", self.networks[0](X).get_device())
         print("device of scores", scores.get_device())
         print("device of actions without conversion", a.get_device())
@@ -3849,7 +3852,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("shape of scores", scores.shape)
         print("shape of actions", a.shape)
         print("shape of rewards", r.shape)
-        scores = scores.squeeze(2)
+        # scores = scores.squeeze(2)
         print("shape of reshaped scores", scores.shape)
         scores_of_actions = torch.gather(scores, dim=1, index=a.unsqueeze(1).type(torch.LongTensor)).squeeze(1)
         print("shape of scores of actions", scores_of_actions.shape)
