@@ -3753,7 +3753,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.networks = [build_mlp(input_size=context_dimension,
                                    output_size=1,
                                    n_layers=n_layers,
-                                   size=hidden_size)]
+                                   size=hidden_size) for _ in range(nchoices)]
         self.networks = [n.to('cuda') for n in self.networks]
         self.optimizer = optim.Adam(reduce(lambda a,b: a + b,
                                            [n.parameters() for n in self.networks]),
