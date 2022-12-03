@@ -198,6 +198,17 @@ class DoublyRobustEstimator:
             p = self.c * p
         if self.pmin is not None:
             p = np.clip(p, a_min = self.pmin, a_max = None)
+
+        print("C.shape: ", C.shape)
+        print("l.shape: ", l.shape)
+        print("a.shape: ", a.shape)
+        print("p.shape: ", p.shape)
+
+        print("l first ten: ", l[0:10])
+        print("C first ten: ", C[0:10])
+
+
+        print("p.shape: ", C,shape)
         
         C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
 
