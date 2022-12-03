@@ -197,6 +197,24 @@ class DoublyRobustEstimator:
             p = np.clip(p, a_min = self.pmin, a_max = None)
         
         C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
+
+        # actions_matching = pred==a
+        # out = rhat_new
+        # out[actions_matching] += (r[actions_matching]-rhat_old[actions_matching])/p[actions_matching].reshape(-1)
+
+        # tmle
+        # y r, Q rhat_old, g p, a a, 
+        Han = p.reshape(-1)
+
+        logLFM = sm.GLM(l, 
+                        Han, 
+                        offset = logit(C[np.arange(C.shape[0]), a]), 
+                        family = sm.families.Binomial()).fit()
+
+        eps = logLFM.params.item()
+        # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
+        C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
+
         if self.method == 'rovr':
             self.oracle = RegressionOneVsRest(self.base_algorithm,
                                               njobs = self.njobs,
