@@ -196,7 +196,7 @@ class DoublyRobustEstimator:
         if self.pmin is not None:
             p = np.clip(p, a_min = self.pmin, a_max = None)
         
-        C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
+        # C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
 
         # actions_matching = pred==a
         # out = rhat_new
