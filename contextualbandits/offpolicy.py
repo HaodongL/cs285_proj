@@ -199,18 +199,16 @@ class DoublyRobustEstimator:
         if self.pmin is not None:
             p = np.clip(p, a_min = self.pmin, a_max = None)
 
-        print("C.shape: ", C.shape)
-        print("l.shape: ", l.shape)
-        print("a.shape: ", a.shape)
-        print("p.shape: ", p.shape)
+        # print("C.shape: ", C.shape)
+        # print("l.shape: ", l.shape)
+        # print("a.shape: ", a.shape)
+        # print("p.shape: ", p.shape)
 
-        print("l first ten: ", l[0:10])
-        print("C first ten: ", C[0:10])
-
-
-        print("p.shape: ", C,shape)
+        # print("l first ten: ", l[0:10])
+        # print("C first ten: ", C[0:10])
+        # print("p.shape: ", C,shape)
         
-        C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
+        # C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
 
         # actions_matching = pred==a
         # out = rhat_new
@@ -220,22 +218,20 @@ class DoublyRobustEstimator:
         # y r, Q rhat_old, g p, a a, 
         # Han = p.reshape(-1)
 
-        # # negate
-        # l = -l
-        # C = -C
+        # negate
+        l = -l
 
-        # logLFM = sm.GLM(l, 
-        #                 Han, 
-        #                 offset = logit(C[np.arange(C.shape[0]), a]), 
-        #                 family = sm.families.Binomial()).fit()
+        logLFM = sm.GLM(l, 
+                        Han, 
+                        offset = logit(C[np.arange(C.shape[0]), a]), 
+                        family = sm.families.Binomial()).fit()
 
-        # eps = logLFM.params.item()
-        # # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
-        # C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
+        eps = logLFM.params.item()
+        # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
+        C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
 
-        # # negate back
-        # l = -l
-        # C = -C
+        # negate back
+        l = -l
 
         if self.method == 'rovr':
             self.oracle = RegressionOneVsRest(self.base_algorithm,
