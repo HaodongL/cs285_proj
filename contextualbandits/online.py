@@ -3831,8 +3831,8 @@ class NeuralBandit(_BasePolicyWithExploit):
             best_k_weight = np.zeros(self.nchoices)
             best_k_weight[best_k] = 1-self.gamma
             new_k_dist += best_k_weight
-            torch_print("print new_k_dist", new_k_dist)
-            torch_print("print new_k_dist best", new_k_dist[best_k])
+            # torch_print("print new_k_dist", new_k_dist)
+            # torch_print("print new_k_dist best", new_k_dist[best_k])
             next_action = np.random.choice(np.arange(self.nchoices), p=new_k_dist)
             print("next action", next_action)
             actions_this_batch.append(next_action)
@@ -3867,7 +3867,9 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("type of scores_of_actions", scores_of_actions.type())
         print("type of rewards", r.type())
         print("actions max", torch.max(a, dim=0))
-        loss = self.loss(scores_of_actions, r)
+        scores_of_actions_normalized = torch_normalize(scores_of_actions)
+        r_normalized = torch_normalize(r)
+        loss = self.loss(scores_of_actions_normalized, r_normalized)
         print("loss", loss)
         self.optimizer.zero_grad()
         loss.backward()
@@ -3954,3 +3956,8 @@ def torch_print(*args, **kwargs):
     torch.set_printoptions(profile="full")
     print(*args, **kwargs)
     torch.set_printoptions(profile="default")
+
+def torch_normalize(t):
+    m = torch.mean(t, axis=0)
+    std = torch.std(t, axis=0)
+    return (t - m)/std
