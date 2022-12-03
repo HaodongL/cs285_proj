@@ -209,6 +209,10 @@ class DoublyRobustEstimator:
         # y r, Q rhat_old, g p, a a, 
         Han = p.reshape(-1)
 
+        # negate
+        l = -l
+        C = -C
+
         logLFM = sm.GLM(l, 
                         Han, 
                         offset = logit(C[np.arange(C.shape[0]), a]), 
@@ -217,6 +221,10 @@ class DoublyRobustEstimator:
         eps = logLFM.params.item()
         # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
         C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
+
+        # negate back
+        l = -l
+        C = -C
 
         if self.method == 'rovr':
             self.oracle = RegressionOneVsRest(self.base_algorithm,
