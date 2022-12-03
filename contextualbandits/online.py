@@ -3960,4 +3960,4 @@ def torch_print(*args, **kwargs):
 def torch_normalize(t):
     m = torch.mean(t, axis=0)
     std = torch.std(t, axis=0)
-    return (t - m)/std
+    return (t - m)/(std + 1e-8)
