@@ -3833,7 +3833,7 @@ class NeuralBandit(_BasePolicyWithExploit):
             new_k_dist += best_k_weight
             torch_print("print new_k_dist", new_k_dist)
             torch_print("print new_k_dist best", new_k_dist[best_k])
-            next_action = np.random.choice(new_k_dist)
+            next_action = np.random.choice(np.arange(self.nchoices), p=new_k_dist)
             print("next action", next_action)
             actions_this_batch.append(next_action)
         actions_this_batch = np.array(actions_this_batch)
