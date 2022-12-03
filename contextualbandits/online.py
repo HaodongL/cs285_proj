@@ -3819,6 +3819,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         else:
             self.scores = scores
         scores = scores.detach().numpy()
+        print("scores", scores)
         best_ks = np.argmax(scores,axis=1)
         print("best ks shape", best_ks.shape)
         actions_this_batch = []
