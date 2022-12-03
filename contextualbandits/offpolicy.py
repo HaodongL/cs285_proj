@@ -7,6 +7,9 @@ from .utils import _check_constructor_input, _check_fit_input, \
 from .online import SeparateClassifiers
 from copy import deepcopy
 from joblib import Parallel, delayed
+import statsmodels.api as sm
+from scipy.special import expit
+from scipy.special import logit
 
 __all__ = ["DoublyRobustEstimator", "OffsetTree"]
 
