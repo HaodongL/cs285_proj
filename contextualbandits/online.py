@@ -3868,6 +3868,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         print("type of rewards", r.type())
         print("actions max", torch.max(a, dim=0))
         loss = self.loss(scores_of_actions, r)
+        print("loss", loss)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
