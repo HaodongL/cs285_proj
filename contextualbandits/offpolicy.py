@@ -216,7 +216,7 @@ class DoublyRobustEstimator:
 
         # tmle
         # y r, Q rhat_old, g p, a a, 
-        # Han = p.reshape(-1)
+        Han = p.reshape(-1)
 
         # negate
         l = -l
