@@ -199,7 +199,7 @@ class DoublyRobustEstimator:
         if self.pmin is not None:
             p = np.clip(p, a_min = self.pmin, a_max = None)
         
-        # C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
+        C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
 
         # actions_matching = pred==a
         # out = rhat_new
@@ -207,24 +207,24 @@ class DoublyRobustEstimator:
 
         # tmle
         # y r, Q rhat_old, g p, a a, 
-        Han = p.reshape(-1)
+        # Han = p.reshape(-1)
 
-        # negate
-        l = -l
-        C = -C
+        # # negate
+        # l = -l
+        # C = -C
 
-        logLFM = sm.GLM(l, 
-                        Han, 
-                        offset = logit(C[np.arange(C.shape[0]), a]), 
-                        family = sm.families.Binomial()).fit()
+        # logLFM = sm.GLM(l, 
+        #                 Han, 
+        #                 offset = logit(C[np.arange(C.shape[0]), a]), 
+        #                 family = sm.families.Binomial()).fit()
 
-        eps = logLFM.params.item()
-        # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
-        C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
+        # eps = logLFM.params.item()
+        # # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
+        # C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
 
-        # negate back
-        l = -l
-        C = -C
+        # # negate back
+        # l = -l
+        # C = -C
 
         if self.method == 'rovr':
             self.oracle = RegressionOneVsRest(self.base_algorithm,
