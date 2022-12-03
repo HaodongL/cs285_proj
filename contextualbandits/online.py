@@ -3947,7 +3947,7 @@ def to_numpy(tensor):
     return tensor.to('cpu').detach().numpy()
 
 
-def torch_print(tensor):
+def torch_print(*args, **kwargs):
     torch.set_printoptions(profile="full")
-    print(tensor)
+    print(*args, **kwargs)
     torch.set_printoptions(profile="default")
