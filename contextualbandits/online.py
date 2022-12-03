@@ -3832,6 +3832,7 @@ class NeuralBandit(_BasePolicyWithExploit):
             best_k_weight[best_k] = 1-self.gamma
             new_k_dist += best_k_weight
             torch_print("print new_k_dist", new_k_dist)
+            torch_print("print new_k_dist best", new_k_dist[best_k])
             next_action = np.random.choice(new_k_dist)
             print("next action shape", next_action.shape)
             actions_this_batch.append(next_action)
