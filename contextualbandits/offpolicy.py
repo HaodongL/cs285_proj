@@ -212,6 +212,287 @@ class DoublyRobustEstimator:
         # print("C first ten: ", C[0:10])
         # print("p.shape: ", C,shape)
         
+        C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
+
+        # actions_matching = pred==a
+        # out = rhat_new
+        # out[actions_matching] += (r[actions_matching]-rhat_old[actions_matching])/p[actions_matching].reshape(-1)
+
+        # tmle
+        # y r, Q rhat_old, g p, a a, 
+        # to positive
+        # C = -C
+        # l = -l
+
+        # Han = p.reshape(-1)
+
+
+        # logLFM = sm.GLM(l, 
+        #                 Han, 
+        #                 offset = logit(C[np.arange(C.shape[0]), a]), 
+        #                 family = sm.families.Binomial()).fit()
+
+        # eps = logLFM.params.item()
+        # # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
+        # C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
+
+        # # to negtive
+        # C = -C
+        # l = -l
+
+
+        if self.method == 'rovr':
+            self.oracle = RegressionOneVsRest(self.base_algorithm,
+                                              njobs = self.njobs,
+                                              **self.kwargs_costsens)
+        else:
+            self.oracle = WeightedAllPairs(self.base_algorithm,
+                                           njobs = self.njobs,
+                                           **self.kwargs_costsens)
+        self.oracle.fit(X, C)
+        self.is_fitted = True
+    
+    def predict(self, X):
+        """
+        Predict best arm for new data.
+        
+        Parameters
+        ----------
+        X : array (n_samples, n_features)
+            New observations for which to choose an action.
+            
+        Returns
+        -------
+        pred : array (n_samples,)
+            Actions chosen by this technique.
+        """
+        assert self.is_fitted
+        X = _check_X_input(X)
+        return self.oracle.predict(X)
+    
+    def decision_function(self, X):
+        """
+        Get score distribution for the arm's rewards
+        
+        Note
+        ----
+        For details on how this is calculated, see the documentation of the
+        RegressionOneVsRest and WeightedAllPairs classes in the costsensitive package.
+        
+        Parameters
+        ----------
+        X : array (n_samples, n_features)
+            New observations for which to evaluate actions.
+            
+        Returns
+        -------
+        pred : array (n_samples, n_choices)
+            Score assigned to each arm for each observation (see Note).
+        """
+        assert self.is_fitted
+        X = _check_X_input(X)
+        return self.oracle.decision_function(X)
+
+
+class TMLE_Estimator:
+    """
+    Doubly-Robust Estimator
+    
+    Estimates the expected reward for each arm, applies a correction for the actions that
+    were chosen, and converts the problem to const-sensitive classification, on which the
+    base algorithm is then fit.
+    
+    Note
+    ----
+    This technique converts the problem into a cost-sensitive classification problem
+    by calculating a matrix of expected rewards and turning it into costs. The base
+    algorithm is then fit to this data, using either the Weighted All-Pairs approach,
+    which requires a binary classifier with sample weights as base algorithm, or the
+    Regression One-Vs-Rest approach, which requires a regressor as base algorithm.
+    
+    In the Weighted All-Pairs approach, this technique will fail if there are actions that
+    were never taken by the exploration policy, as it cannot construct a model for them.
+    
+    The expected rewards are estimated with the imputer algorithm passed here, which should
+    output a number in the range :math:`[0,1]`.
+    
+    This technique is meant for the case of contiunous rewards in the :math:`[0,1]` interval,
+    but here it is used for the case of discrete rewards :math:`\{0,1\}`, under which it performs
+    poorly. It is not recommended to use, but provided for comparison purposes.
+    
+    
+    Alo important: this method requires to form reward estimates of all arms for each observation. In order to
+    do so, you can either provide estimates as an array (see Parameters), or pass a model.
+    
+    One method to obtain reward estimates is to fit a model to the data and use its predictions as
+    reward estimates. You can do so by passing an object of class
+    `contextualbandits.online.SeparateClassifiers` which should be already fitted, or by passing a
+    classifier with a 'predict_proba' method, which will be put into a 'SeparateClassifiers'
+     object and fit to the same data passed to this function to obtain reward estimates.
+    
+    The estimates can make invalid predictions if there are some arms for which every time
+    they were chosen they resulted in a reward, or never resulted in a reward. In such cases,
+    this function includes the option to impute the "predictions" for them (which would otherwise
+    always be exactly zero or one regardless of the context) by replacing them with random
+    numbers :math:`\sim \text{Beta}(3,1)` or :math:`\sim \text{Beta}(1,3)` for the cases of
+    always good and always bad.
+    
+    This is just a wild idea though, and doesn't guarantee reasonable results in such siutation.
+    
+    Note that, if you are using the 'SeparateClassifiers' class from the online module in this
+    same package, it comes with a method 'predict_proba_separate' that can be used to get reward
+    estimates. It still can suffer from the same problem of always-one and always-zero predictions though.
+    
+    Parameters
+    ----------
+    base_algorithm : obj
+        Base algorithm to be used for cost-sensitive classification.
+    reward_estimator : obj or array (n_samples, n_choices)
+        One of the following:
+            * An array with the first column corresponding to the reward estimates for the action chosen
+              by the new policy, and the second column corresponding to the reward estimates for the
+              action chosen in the data (see Note for details).
+            * An already-fit object of class 'contextualbandits.online.SeparateClassifiers', which will
+              be used to make predictions on the actions chosen and the actions that the new
+              policy would choose.
+            * A classifier with a 'predict_proba' method, which will be fit to the same test data
+              passed here in order to obtain reward estimates (see Note 2 for details).
+    nchoices : int
+        Number of arms/labels to choose from.
+        Only used when passing a classifier object to 'reward_estimator'.
+    method : str, either 'rovr' or 'wap'
+        Whether to use Regression One-Vs-Rest or Weighted All-Pairs (see Note 1)
+    handle_invalid : bool
+        Whether to replace 0/1 estimated rewards with randomly-generated numbers (see Note 2)
+    random_state : int, None, RandomState, or Generator
+        Either an integer which will be used as seed for initializing a
+        ``Generator`` object for random number generation, a ``RandomState``
+        object (from NumPy) from which to draw an integer, or a ``Generator``
+        object (from NumPy), which will be used directly.
+        This is used when passing ``handle_invalid=True`` or ``beta_prior != None``.
+    c : None or float
+        Constant by which to multiply all scores from the exploration policy.
+    pmin : None or float
+        Scores (from the exploration policy) will be converted to the minimum between
+        pmin and the original estimate.
+    beta_prior : tuple((a, b), n), str "auto", or None
+        Beta prior to pass to 'SeparateClassifiers'. Only used when passing to
+        'reward_estimator' a classifier with 'predict_proba'. See the documentation
+        of 'SeparateClassifiers' for details about it.
+    smoothing : tuple(a, b), list, or None
+        Smoothing parameter to pass to ``SeparateClassifiers``. Only used when passing to 'reward_estimator'
+        a classifier with 'predict_proba'. See the documentation of ``SeparateClassifiers`` for details.
+    njobs : int or None
+        Number of parallel jobs to run. If passing None will set it to 1. If passing -1 will
+        set it to the number of CPU cores.
+    kwargs_costsens
+        Additional keyword arguments to pass to the cost-sensitive classifier.
+    
+    References
+    ----------
+    .. [1] Dudík, Miroslav, John Langford, and Lihong Li. "Doubly robust policy evaluation and learning."
+           arXiv preprint arXiv:1103.4601 (2011).
+    .. [2] Dudík, Miroslav, et al. "Doubly robust policy evaluation and optimization."
+           Statistical Science 29.4 (2014): 485-511.
+    """
+    def __init__(self, base_algorithm, reward_estimator, nchoices, method='rovr',
+                 handle_invalid=True, random_state=1, c=None, pmin=1e-5,
+                 beta_prior=None, smoothing=(1.,2.), njobs=-1, **kwargs_costsens):
+        assert (method == 'rovr') or (method == 'wap')
+        self.method = method
+        if method == 'wap':
+            _check_constructor_input(base_algorithm, nchoices)
+        else:
+            assert isinstance(nchoices, int)
+            assert nchoices > 2
+            assert hasattr(base_algorithm, "fit") and hasattr(base_algorithm, "predict")
+        
+        if c is not None:
+            assert isinstance(c, float)
+        if pmin is not None:
+            assert isinstance(pmin, float)
+        assert isinstance(handle_invalid, bool)
+        
+        if type(reward_estimator) == np.ndarray:
+            assert reward_estimator.shape[1] == nchoices
+        else:
+            assert hasattr(reward_estimator, "predict_proba_separate") or hasattr(reward_estimator, "predict_proba")
+
+        if beta_prior is not None:
+            beta_prior = _check_beta_prior(beta_prior, nchoices, 2)
+        
+        self.base_algorithm = base_algorithm
+        self.reward_estimator = reward_estimator
+        self.nchoices = nchoices
+        self.c = c
+        self.pmin = pmin
+        self.handle_invalid = handle_invalid
+        self.random_state = _check_random_state(random_state)
+        self.beta_prior = beta_prior
+        self.smoothing = _check_smoothing(smoothing, nchoices)
+        self.njobs = _check_njobs(njobs)
+        self.kwargs_costsens = kwargs_costsens
+        self.is_fitted = False
+    
+    def fit(self, X, a, r, p):
+        """
+        Fits the Doubly-Robust estimator to partially-labeled data collected from a different policy.
+        
+        Parameters
+        ----------
+        X : array (n_samples, n_features)
+            Matrix of covariates for the available data.
+        a : array (n_samples), int type
+            Arms or actions that were chosen for each observations.
+        r : array (n_samples), {0,1}
+            Rewards that were observed for the chosen actions. Must be binary rewards 0/1.
+        p : array (n_samples)
+            Reward estimates for the actions that were chosen by the policy.
+        """
+        try:
+            from costsensitive import RegressionOneVsRest, WeightedAllPairs
+        except Exception:
+            raise ValueError("This functionality requires package 'costsensitive'.\nCan be installed with 'pip install costsensitive'.")
+        p = _check_1d_inp(p)
+        assert p.shape[0] == X.shape[0]
+        l = -r
+        
+        if type(self.reward_estimator) == np.ndarray:
+            C = self.reward_estimator
+        elif hasattr(self.reward_estimator, "predict_proba_separate"):
+            C = -self.reward_estimator.predict_proba_separate(X)
+        elif hasattr(self.reward_estimator, "predict_proba"):
+            reward_estimator = \
+                SeparateClassifiers(self.reward_estimator, self.nchoices,
+                    beta_prior = self.beta_prior, smoothing = self.smoothing,
+                    random_state = self.random_state, njobs = self.njobs)
+            reward_estimator.fit(X, a, r)
+            C = -reward_estimator.predict_proba_separate(X)
+        else:
+            raise ValueError("Error: couldn't obtain reward estimates. Are you passing the right input to 'reward_estimator'?")
+        
+        if self.handle_invalid:
+            # to positive
+            C = -C
+            C[C >= 1] = self.random_state.beta(3, 1, size = C.shape)[C >= 1]
+            C[C <= 0] = self.random_state.beta(1, 3, size = C.shape)[C <= 0]
+            # to negative
+            C = -C
+        
+        if self.c is not None:
+            p = self.c * p
+        if self.pmin is not None:
+            p = np.clip(p, a_min = self.pmin, a_max = None)
+
+        # print("C.shape: ", C.shape)
+        # print("l.shape: ", l.shape)
+        # print("a.shape: ", a.shape)
+        # print("p.shape: ", p.shape)
+
+        # print("l first ten: ", l[0:10])
+        # print("C first ten: ", C[0:10])
+        # print("p.shape: ", C,shape)
+        
         # C[np.arange(C.shape[0]), a] += (l - C[np.arange(C.shape[0]), a]) / p.reshape(-1)
 
         # actions_matching = pred==a
