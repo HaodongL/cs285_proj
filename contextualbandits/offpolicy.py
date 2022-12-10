@@ -191,8 +191,12 @@ class DoublyRobustEstimator:
             raise ValueError("Error: couldn't obtain reward estimates. Are you passing the right input to 'reward_estimator'?")
         
         if self.handle_invalid:
+            # to positive
+            C = -C
             C[C >= 1] = self.random_state.beta(3, 1, size = C.shape)[C >= 1]
             C[C <= 0] = self.random_state.beta(1, 3, size = C.shape)[C <= 0]
+            # to negative
+            C = -C
         
         if self.c is not None:
             p = self.c * p
@@ -216,6 +220,10 @@ class DoublyRobustEstimator:
 
         # tmle
         # y r, Q rhat_old, g p, a a, 
+        # to positive
+        C = -C
+        l = -l
+
         Han = p.reshape(-1)
 
 
@@ -227,6 +235,10 @@ class DoublyRobustEstimator:
         eps = logLFM.params.item()
         # out[actions_matching] = expit(logit(out[actions_matching]) + eps*H1n[actions_matching])
         C[np.arange(C.shape[0]), a] = expit(logit(C[np.arange(C.shape[0]), a]) + eps*Han)
+
+        # to negtive
+        C = -C
+        l = -l
 
 
         if self.method == 'rovr':
