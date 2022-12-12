@@ -3733,7 +3733,7 @@ class NeuralBandit(_BasePolicyWithExploit):
     .. [2] Li, Lihong, et al. "A contextual-bandit approach to personalized news article recommendation."
            Proceedings of the 19th international conference on World wide web. ACM, 2010.
     """
-    def __init__(self, nchoices, context_dimension=1, learning_rate=0.1,hidden_size=2,n_layers=1,gamma=0.05,alpha=1.0, lambda_=1.0, fit_intercept=True,
+    def __init__(self, nchoices, context_dimension=1, learning_rate=0.1,scheduler_stepsize=30,hidden_size=2,n_layers=1,gamma=0.05,alpha=1.0, lambda_=1.0, fit_intercept=True,
                  use_float=True, method="sm", ucb_from_empty=True,
                  beta_prior=None, smoothing=None, noise_to_smooth=True,
                  assume_unique_reward=False, random_state=None, njobs=1):
@@ -3761,7 +3761,7 @@ class NeuralBandit(_BasePolicyWithExploit):
                                     self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.StepLR(
             self.optimizer,
-            step_size=20,
+            step_size=scheduler_stepsize,
             gamma = 0.5
             # lambda t: PiecewiseSchedule([
             #         (0, 1e-1),
