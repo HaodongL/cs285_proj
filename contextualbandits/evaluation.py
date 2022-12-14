@@ -260,6 +260,139 @@ def evaluateDoublyRobust(pred, X, a, r, p, reward_estimator, nchoices=None,
     
     actions_matching = pred==a
     out = rhat_new
+    out[actions_matching] += (r[actions_matching]-rhat_old[actions_matching])/p[actions_matching].reshape(-1)
+
+    return np.mean(out)
+
+def evaluateTMLE(pred, X, a, r, p, reward_estimator, nchoices=None,
+                         handle_invalid=True, c=None, pmin=1e-5,
+                         random_state = 1):
+    """
+    Doubly-Robust Policy Evaluation
+    
+    Evaluates rewards of arm choices of a policy from data collected by another policy, using a reward estimator along with the historical probabilities
+    (hence the name).
+    
+    Note
+    ----
+    This method requires to form reward estimates of the arms that were chosen and of the arms
+    that the policy to be evaluated would choose. In order to do so, you can either provide
+    estimates as an array (see Parameters), or pass a model.
+    
+    One method to obtain reward estimates is to fit a model to both the training and test data
+    and use its predictions as reward estimates. You can do so by passing an object of class
+    `contextualbandits.online.SeparateClassifiers` which should be already fitted.
+    
+    Another method is to fit a model to the test data, in which case you can pass a classifier
+    with a 'predict_proba' method here, which will be fit to the same test data passed to this
+    function to obtain reward estimates.
+    
+    The last two options can suffer from invalid predictions if there are some arms for which every time
+    they were chosen they resulted in a reward, or never resulted in a reward. In such cases,
+    this function includes the option to impute the "predictions" for them (which would otherwise
+    always be exactly zero or one regardless of the context) by replacing them with random
+    numbers ~Beta(3,1) or ~Beta(1,3) for the cases of always good and always bad.
+    
+    This is just a wild idea though, and doesn't guarantee reasonable results in such siutation.
+    
+    Note that, if you are using the 'SeparateClassifiers' class from the online module in this
+    same package, it comes with a method 'predict_proba_separate' that can be used to get reward
+    estimates. It still can suffer from the same problem of always-one and always-zero predictions though.
+    
+    Parameters
+    ----------
+    pred : array (n_samples,)
+        Arms that would be chosen by the policy to evaluate.
+    X : array (n_samples, n_features)
+        Matrix of covariates for the available data.
+    a : array (n_samples), int type
+        Arms or actions that were chosen for each observation.
+    r : array (n_samples), {0,1}
+        Rewards that were observed for the chosen actions. Must be binary rewards 0/1.
+    p : array (n_samples)
+        Scores or reward estimates from the policy that generated the data for the actions
+        that were chosen by it.
+    reward_estimator : obj or array (n_samples, 2)
+        One of the following:
+            * An array with the first column corresponding to the reward estimates for the action chosen
+              by the new policy, and the second column corresponding to the reward estimates for the
+              action chosen in the data (see Note for details).
+            * An already-fit object of class 'contextualbandits.online.SeparateClassifiers', which will
+              be used to make predictions on the actions chosen and the actions that the new
+              policy would choose.
+            * A classifier with a 'predict_proba' method, which will be fit to the same test data
+              passed here in order to obtain reward estimates (see Note for details).
+    nchoices : int
+        Number of arms/labels to choose from.
+        Only used when passing a classifier object to 'reward_estimator'.
+    handle_invalid : bool
+        Whether to replace 0/1 estimated rewards with randomly-generated numbers (see Note)
+    c : None or float
+        Constant by which to multiply all scores from the exploration policy.
+    pmin : None or float
+        Scores (from the exploration policy) will be converted to the minimum between
+        pmin and the original estimate.
+    random_state : int, None, RandomState, or Generator
+        Either an integer which will be used as seed for initializing a
+        ``Generator`` object for random number generation, a ``RandomState``
+        object (from NumPy) from which to draw an integer, or a ``Generator``
+        object (from NumPy), which will be used directly.
+
+    Returns
+    -------
+    est : float
+        The estimated mean reward that the new policy would obtain on the 'X' data.
+    
+    References
+    ----------
+    .. [1] Dudík, Miroslav, John Langford, and Lihong Li. "Doubly robust policy evaluation and learning."
+           arXiv preprint arXiv:1103.4601 (2011).
+    """
+    X,a,r=_check_fit_input(X,a,r)
+    p=_check_1d_inp(p)
+    pred=_check_1d_inp(pred)
+    assert p.shape[0]==X.shape[0]
+    assert pred.shape[0]==X.shape[0]
+    if c is not None:
+        assert isinstance(c, float)
+    if pmin is not None:
+        assert isinstance(pmin, float)
+
+    rs = _check_random_state(random_state)
+    
+    if type(reward_estimator)==np.ndarray:
+        assert reward_estimator.shape[1]==2
+        assert reward_estimator.shape[0]==X.shape[0]
+        rhat_new = reward_estimator[:, 0]
+        rhat_old = reward_estimator[:, 1]
+    elif hasattr(reward_estimator, "predict_proba_separate"):
+        rhat = reward_estimator.predict_proba_separate(X)
+        rhat_new = rhat[np.arange(rhat.shape[0]), pred]
+        rhat_old = rhat[np.arange(rhat.shape[0]), a]
+    elif hasattr(reward_estimator, "predict_proba"):
+        reward_estimator = SeparateClassifiers(reward_estimator, nchoices, random_state=rs)
+        reward_estimator.fit(X, a, r)
+        rhat = reward_estimator.predict_proba_separate(X)
+        rhat_new = rhat[np.arange(rhat.shape[0]), pred]
+        rhat_old = rhat[np.arange(rhat.shape[0]), a]
+    else:
+        error_msg = "'reward_estimator' must be either an array, a classifier with"
+        error_msg += "'predict_proba', or a 'SeparateClassifiers' object."
+        raise ValueError(error_msg)
+    
+    if handle_invalid:
+        rhat_new[rhat_new==1] = rs.beta(3,1,size=rhat_new.shape)[rhat_new==1]
+        rhat_new[rhat_new==0] = rs.beta(1,3,size=rhat_new.shape)[rhat_new==0]
+        rhat_old[rhat_old==1] = rs.beta(3,1,size=rhat_old.shape)[rhat_old==1]
+        rhat_old[rhat_old==0] = rs.beta(1,3,size=rhat_old.shape)[rhat_old==0]
+    
+    if c is not None:
+        p = c*p
+    if pmin is not None:
+        p = np.clip(p, a_min=pmin, a_max=None)
+    
+    actions_matching = pred==a
+    out = rhat_new
     # out[actions_matching] += (r[actions_matching]-rhat_old[actions_matching])/p[actions_matching].reshape(-1)
 
     # tmle
