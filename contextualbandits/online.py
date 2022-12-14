@@ -3759,16 +3759,16 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.networks = [n.to(proj_device) for n in self.networks]
         self.optimizer = optim.Adam(chain(*[n.parameters() for n in self.networks]),
                                     self.learning_rate)
-        self.learning_rate_scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer,
-            step_size=scheduler_stepsize,
-            gamma = 0.5
-            # lambda t: PiecewiseSchedule([
-            #         (0, 1e-1),
-            #         (num_timesteps / 40, 1e-1),
-            #         (num_timesteps / 8, 5e-2),
-            #     ], outside_value=5e-2,)(t),
-        )
+        # self.learning_rate_scheduler = torch.optim.lr_scheduler.StepLR(
+        #     self.optimizer,
+        #     step_size=scheduler_stepsize,
+        #     gamma = 0.5
+        #     # lambda t: PiecewiseSchedule([
+        #     #         (0, 1e-1),
+        #     #         (num_timesteps / 40, 1e-1),
+        #     #         (num_timesteps / 8, 5e-2),
+        #     #     ], outside_value=5e-2,)(t),
+        # )
 
         self.loss = torch.nn.MSELoss()
 
