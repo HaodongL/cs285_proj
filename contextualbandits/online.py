@@ -3885,7 +3885,7 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        self.learning_rate_scheduler.step()
+        # self.learning_rate_scheduler.step()
         self.scores = self.scores.detach()
         self.is_fitted = True
 
