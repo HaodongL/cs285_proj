@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
-
+from functools import reduce
+from itertools import chain
 import numpy as np, warnings, ctypes
+import torch
+from torch import nn
+import torch.optim as optim
+
 from .utils import _check_constructor_input, _check_beta_prior, \
             _check_smoothing, _check_fit_input, _check_X_input, _check_1d_inp, \
             _ZeroPredictor, _OnePredictor, _OneVsRest,\
@@ -3606,3 +3611,253 @@ class PartitionedTS(_BasePolicyWithExploit):
         self._add_common_params(base, beta_prior, smoothing, noise_to_smooth, njobs,
                                 nchoices, False, None, False,
                                 assume_unique_reward, random_state)
+
+
+
+
+class NeuralBandit(_BasePolicyWithExploit):
+    def __init__(self, nchoices, context_dimension=1, learning_rate=0.1,scheduler_stepsize=30,
+                 hidden_size=2,n_layers=1,gamma=0.05, gamma_decay=1,
+                 alpha=1.0, lambda_=1.0, fit_intercept=True,
+                 use_float=True, method="sm", ucb_from_empty=True,
+                 beta_prior=None, smoothing=None, noise_to_smooth=True,
+                 assume_unique_reward=False, random_state=None, njobs=1):
+        # self._ts = False
+        # self._add_common_lin(alpha, lambda_, fit_intercept, use_float, method, nchoices, njobs)
+        # base = _LinUCB_n_TS_single(alpha=self.alpha, lambda_=self.lambda_,
+        #                            fit_intercept=self.fit_intercept,
+        #                            use_float=self.use_float, method=self.method,
+        #                            ts=False, ts_from_ci=False)
+        # self._add_common_params(base, beta_prior, smoothing, noise_to_smooth, njobs, nchoices,
+        #                         True, None, False, assume_unique_reward,
+        #                         random_state, assign_algo=True, prior_def_ucb=True,
+        #                         force_unfit_predict=ucb_from_empty)
+        self.scores = None
+        self.nchoices = nchoices
+        self.dim = context_dimension
+        self.gamma = gamma
+        self.gamma_min = 0.01
+        self.gamma_decay = 0.999
+        self.learning_rate = learning_rate
+        self.networks = [build_mlp(input_size=context_dimension,
+                                   output_size=1,
+                                   n_layers=n_layers,
+                                   size=hidden_size) for _ in range(nchoices)]
+        self.networks = [n.to(proj_device) for n in self.networks]
+        self.optimizer = optim.Adam(chain(*[n.parameters() for n in self.networks]),
+                                    self.learning_rate)
+        # self.learning_rate_scheduler = torch.optim.lr_scheduler.StepLR(
+        #     self.optimizer,
+        #     step_size=scheduler_stepsize,
+        #     gamma = 0.5
+        #     # lambda t: PiecewiseSchedule([
+        #     #         (0, 1e-1),
+        #     #         (num_timesteps / 40, 1e-1),
+        #     #         (num_timesteps / 8, 5e-2),
+        #     #     ], outside_value=5e-2,)(t),
+        # )
+
+        self.loss = torch.nn.MSELoss()
+
+
+    def _add_common_lin(self, alpha, lambda_, fit_intercept, use_float, method, nchoices, njobs):
+        if isinstance(alpha, int):
+            alpha = float(alpha)
+        assert isinstance(alpha, float)
+        if isinstance(lambda_, int):
+            lambda_ = float(lambda_)
+        assert lambda_ >= 0.
+        assert method in ["chol", "sm"]
+
+        self.alpha = alpha
+        self.lambda_ = lambda_
+        self.fit_intercept = bool(fit_intercept)
+        self.use_float = bool(use_float)
+        self.method = method
+        if self._ts:
+            self.v_sq = self.alpha
+            del self.alpha
+
+    def reset_alpha(self, alpha=1.0):
+        """
+        Set the upper confidence bound parameter to a custom number
+
+        Note
+        ----
+        This method is only for LinUCB, not for LinTS.
+
+        Parameters
+        ----------
+        alpha : float
+            Parameter to control the upper confidence bound (more is higher).
+
+        Returns
+        -------
+        self : obj
+            This object
+        """
+        if self._ts:
+            raise ValueError("Method is only available for LinUCB")
+        if isinstance(alpha, int):
+            alpha = float(alpha)
+        assert isinstance(alpha, float)
+        self.alpha = alpha
+        self.base_algorithm.alpha = alpha
+        if self.is_fitted:
+            self._oracles.reset_attribute("alpha", alpha)
+        return self
+
+    def predict(self, X, exploit = False, output_score = False):
+        X = from_numpy(X)
+        print("context shape", X.shape)
+        scores = torch.stack([n(X) for n in self.networks], dim=1).squeeze(2)
+        print("scores shape", scores.shape)
+        if self.scores != None:
+            self.scores = torch.cat((self.scores, scores), 0)
+        else:
+            self.scores = scores
+        scores = scores.detach().numpy()
+        print("scores", scores)
+        best_ks = np.argmax(scores,axis=1)
+        print("best ks shape", best_ks.shape)
+        actions_this_batch = []
+        for b in range(len(best_ks)):
+            best_k = best_ks[b]
+            print("best k shape", best_k.shape)
+            print("best k", best_k)
+            new_k_dist = np.ones(self.nchoices) * self.gamma/self.nchoices
+            best_k_weight = np.zeros(self.nchoices)
+            best_k_weight[best_k] = 1-self.gamma
+            new_k_dist += best_k_weight
+            # torch_print("print new_k_dist", new_k_dist)
+            # torch_print("print new_k_dist best", new_k_dist[best_k])
+            next_action = np.random.choice(np.arange(self.nchoices), p=new_k_dist)
+            print("next action", next_action)
+            actions_this_batch.append(next_action)
+        actions_this_batch = np.array(actions_this_batch)
+        print("action this batch", actions_this_batch)
+        self.actions_this_batch = actions_this_batch
+        self.gamma = max(self.gamma_min, self.gamma * self.gamma_decay)
+        return actions_this_batch
+
+    def fit(self, X, a, r, warm_start=False):
+        print("actions", a)
+        X = from_numpy(X)
+        a = from_numpy(a)
+        r = from_numpy(r)
+        if warm_start:
+            scores = self.scores
+        else:
+            scores = torch.stack([n(X) for n in self.networks], dim=1).squeeze(2)
+            self.scores = scores
+        print("device of single scores", self.networks[0](X).get_device())
+        print("device of scores", scores.get_device())
+        print("device of actions without conversion", a.get_device())
+        print("type of actions", a.type())
+        print("device of actions", a.type(torch.cuda.LongTensor).get_device())
+        print("shape of X", X.shape)
+        print("shape of scores", scores.shape)
+        print("shape of actions", a.shape)
+        print("shape of rewards", r.shape)
+        # scores = scores.squeeze(2)
+        print("shape of reshaped scores", scores.shape)
+        scores_of_actions = torch.gather(scores, dim=1, index=a.unsqueeze(1).type(torch.LongTensor)).squeeze(1)
+        print("shape of scores of actions", scores_of_actions.shape)
+        print("type of scores_of_actions", scores_of_actions.type())
+        print("type of rewards", r.type())
+        print("actions max", torch.max(a, dim=0))
+        scores_of_actions_normalized = torch_normalize(scores_of_actions)
+        r_normalized = torch_normalize(r)
+        loss = self.loss(scores_of_actions_normalized, r_normalized)
+        print("loss", loss)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        # self.learning_rate_scheduler.step()
+        self.scores = self.scores.detach()
+        self.is_fitted = True
+
+    # def partial_fit(self, X, y, *args, **kwargs):
+    #     raise NotImplementedError
+    def exploit(self, X):
+        if not self.is_fitted:
+            return np.zeros(X.shape[0])
+        return self.predict(X, exploit = True)
+
+_str_to_activation = {
+    'relu': nn.ReLU(),
+    'tanh': nn.Tanh(),
+    'leaky_relu': nn.LeakyReLU(),
+    'sigmoid': nn.Sigmoid(),
+    'selu': nn.SELU(),
+    'softplus': nn.Softplus(),
+    'identity': nn.Identity(),
+}
+def weights_init_uniform_rule(m):
+    #https://stackoverflow.com/questions/49433936/how-do-i-initialize-weights-in-pytorch
+    classname = m.__class__.__name__
+    # for every Linear layer in a model..
+    if classname.find('Linear') != -1:
+        # get the number of the inputs
+        n = m.in_features
+        y = 1.0/np.sqrt(n)
+        m.weight.data.uniform_(-y, y)
+        m.bias.data.fill_(0)
+
+def build_mlp(
+        input_size: int,
+        output_size: int,
+        n_layers: int,
+        size: int,
+        activation= 'tanh',
+        output_activation= 'identity',
+):
+    """
+        Builds a feedforward neural network
+        arguments:
+            input_placeholder: placeholder variable for the state (batch_size, input_size)
+            scope: variable scope of the network
+            n_layers: number of hidden layers
+            size: dimension of each hidden layer
+            activation: activation of each hidden layer
+            input_size: size of the input layer
+            output_size: size of the output layer
+            output_activation: activation of the output layer
+        returns:
+            output_placeholder: the result of a forward pass through the hidden layers + the output layer
+    """
+    if isinstance(activation, str):
+        activation = _str_to_activation[activation]
+    if isinstance(output_activation, str):
+        output_activation = _str_to_activation[output_activation]
+    layers = []
+    in_size = input_size
+    for _ in range(n_layers):
+        layers.append(nn.Linear(in_size, size))
+        layers.append(activation)
+        in_size = size
+    layers.append(nn.Linear(in_size, output_size))
+    layers.append(output_activation)
+    net = nn.Sequential(*layers)
+    net.apply(weights_init_uniform_rule)
+    return net
+
+proj_device = 'cpu'
+
+def from_numpy(*args, **kwargs):
+    return torch.from_numpy(*args, **kwargs).float().to(proj_device)
+
+
+def to_numpy(tensor):
+    return tensor.to('cpu').detach().numpy()
+
+
+def torch_print(*args, **kwargs):
+    torch.set_printoptions(profile="full")
+    print(*args, **kwargs)
+    torch.set_printoptions(profile="default")
+
+def torch_normalize(t):
+    m = torch.mean(t, axis=0)
+    std = torch.std(t, axis=0)
+    return (t - m)/(std + 1e-8)
