@@ -3617,7 +3617,7 @@ class PartitionedTS(_BasePolicyWithExploit):
 
 class NeuralBandit(_BasePolicyWithExploit):
     def __init__(self, nchoices, context_dimension=1, learning_rate=0.1,scheduler_stepsize=30,
-                 hidden_size=2,n_layers=1,gamma=0.05, gamma_decay=1,
+                 hidden_size=2,n_layers=1,gamma=0.05, gamma_decay=1, gamma_min=0.01,
                  alpha=1.0, lambda_=1.0, fit_intercept=True,
                  use_float=True, method="sm", ucb_from_empty=True,
                  beta_prior=None, smoothing=None, noise_to_smooth=True,
@@ -3636,8 +3636,8 @@ class NeuralBandit(_BasePolicyWithExploit):
         self.nchoices = nchoices
         self.dim = context_dimension
         self.gamma = gamma
-        self.gamma_min = 0.01
-        self.gamma_decay = 0.999
+        self.gamma_min = gamma_min
+        self.gamma_decay = gamma_decay
         self.learning_rate = learning_rate
         self.networks = [build_mlp(input_size=context_dimension,
                                    output_size=1,
